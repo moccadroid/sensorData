@@ -28,6 +28,8 @@ export default class App extends Component<Props> {
             username: undefined,
             sending: false,
             error: false,
+            
+            topWifiSignal: undefined
         };
     }
     
@@ -60,7 +62,7 @@ export default class App extends Component<Props> {
     
     scanWifi() {
         console.log("scanning");
-        
+        /*
         wifi.loadWifiList((wifiStringList) => {
             const wifiArray = JSON.parse(wifiStringList);
             const data = this.state.wifiData;
@@ -84,10 +86,35 @@ export default class App extends Component<Props> {
         }, (error) => {
             console.log(error);
         });
+        */
 
+        wifi.reScanAndLoadWifiList((wifiStringList) => {
+            const wifiArray = JSON.parse(wifiStringList);
+            this.setState({ topWifiSignal: wifiArray[0]});
+            
+            const data = this.state.wifiData;
+
+            let roomData = this.state.wifiData[this.state.activeRoom];
+            if (!roomData) {
+                roomData = { wifiData: {}}
+            }
+
+            wifiArray.forEach(wifi => {
+                let wifiData = roomData.wifiData[wifi.BSSID];
+                if (!wifiData) {
+                    wifiData = {levels: [], ssid: wifi.SSID};
+                }
+                wifiData.levels = [...wifiData.levels, wifi.level];
+                roomData.wifiData[wifi.BSSID] = wifiData;
+            });
+            data[this.state.activeRoom] = roomData;
+
+            this.setState({ wifiData: data});
+        }, error => console.log(error));
+        
         console.log(this.state.scanning);
         if (this.state.scanning) {
-            setTimeout(this.scanWifi.bind(this), 200);
+            setTimeout(this.scanWifi.bind(this), 500);
         }
     
     }
@@ -123,7 +150,7 @@ export default class App extends Component<Props> {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Text style={styles.welcome}>Welcome to SensorData!</Text>
+                    <Text style={styles.welcome}>{this.state.topWifiSignal ? this.state.topWifiSignal.BSSID + ' ' + this.state.topWifiSignal.level : 'start scanning'}</Text>
                     <TextInput maxLength={18}
                                underlineColorAndroid='transparent'
                                value={this.state.username}
