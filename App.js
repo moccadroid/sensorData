@@ -9,6 +9,7 @@
 import React, { Component } from 'react';
 import { PermissionsAndroid, Platform, StyleSheet, Text, View, ActivityIndicator,
     TextInput, TouchableOpacity, AsyncStorage, Picker} from 'react-native';
+import { Magnetometer } from 'react-native-sensors';
 import wifi from 'react-native-android-wifi';
 import firestore from './firebase';
 
@@ -19,8 +20,9 @@ export default class App extends Component<Props> {
         super(props);
         
         this.state = {
-            wifis: [],
             wifiData: {},
+            magnetometer: {},
+            
             granted: false,
             scanning: false,
             rooms: ['living room', 'kitchen', 'bedroom'],
@@ -29,7 +31,8 @@ export default class App extends Component<Props> {
             sending: false,
             error: false,
             
-            topWifiSignal: undefined
+            topWifiSignal: undefined,
+            topMagnetSignal: undefined,
         };
     }
     
@@ -60,33 +63,31 @@ export default class App extends Component<Props> {
         }
     }
     
+    async scanMagnetometer() {
+        const observable = await new Magnetometer({ updateInterval: 500 });
+        observable.subscribe(value => {
+            if (this.state.scanning) {
+                const data = this.state.magnetometer;
+                
+                let roomData = this.state.magnetometer[this.state.activeRoom];
+                if (!roomData) {
+                    roomData = { magnetData: [] }
+                }
+                
+                roomData.magnetData = [...roomData.magnetData, value];
+                
+                data[this.state.activeRoom] = roomData;
+                
+                this.setState({
+                    magnetometer: data, 
+                    topMagnetSignal: { x: value.x, y: value.y, z: value.z}
+                });
+            }
+        });
+    }
+    
     scanWifi() {
         console.log("scanning");
-        /*
-        wifi.loadWifiList((wifiStringList) => {
-            const wifiArray = JSON.parse(wifiStringList);
-            const data = this.state.wifiData;
-
-            let roomData = this.state.wifiData[this.state.activeRoom];
-            if (!roomData) {
-                roomData = { wifiData: {}}
-            }
-
-            wifiArray.forEach(wifi => {
-                let wifiData = roomData.wifiData[wifi.BSSID];
-                if (!wifiData) {
-                    wifiData = {levels: [], ssid: wifi.SSID};
-                }
-                wifiData.levels = [...wifiData.levels, wifi.level];
-                roomData.wifiData[wifi.BSSID] = wifiData;
-            });
-            data[this.state.activeRoom] = roomData;
-
-            this.setState({ wifiData: data});
-        }, (error) => {
-            console.log(error);
-        });
-        */
 
         wifi.reScanAndLoadWifiList((wifiStringList) => {
             const wifiArray = JSON.parse(wifiStringList);
@@ -121,7 +122,10 @@ export default class App extends Component<Props> {
     
     startScanning() {
         if (this.state.granted) {
-            this.setState({scanning: true}, this.scanWifi.bind(this));
+            this.setState({scanning: true}, () => {
+                this.scanWifi();
+                this.scanMagnetometer();
+            });
         }
     }
     
@@ -135,8 +139,11 @@ export default class App extends Component<Props> {
         if (this.state.username && this.state.username !== '') {
             this.setState({ sending: true });
             firestore.collection(this.state.username).doc('wifi').set(this.state.wifiData).then(result => {
-                 this.setState({ sending: false });
+                firestore.collection(this.state.username).doc('magnetometer').set(this.state.magnetometer).then(result => {
+                    this.setState({ sending: false });
+                });
             });
+            
         } else {
             this.setState({ error: true });
         }
@@ -150,7 +157,10 @@ export default class App extends Component<Props> {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Text style={styles.welcome}>{this.state.topWifiSignal ? this.state.topWifiSignal.BSSID + ' ' + this.state.topWifiSignal.level : 'start scanning'}</Text>
+                    <Text style={styles.welcome}>{this.state.topMagnetSignal ? JSON.stringify(this.state.topMagnetSignal) : ''}</Text>
+                    <Text style={styles.welcome}>{this.state.topWifiSignal 
+                        ? this.state.topWifiSignal.BSSID + '\n' + this.state.topWifiSignal.SSID + '\n' + this.state.topWifiSignal.level 
+                        : 'start scanning'}</Text>
                     <TextInput maxLength={18}
                                underlineColorAndroid='transparent'
                                value={this.state.username}
@@ -214,7 +224,7 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     welcome: {
-        fontSize: 20,
+        fontSize: 14,
         textAlign: 'center',
         margin: 10,
     },
