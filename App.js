@@ -100,6 +100,7 @@ export default class App extends Component<Props> {
                 roomData = { wifiData: {}}
             }
 
+            // TODO: fill them up with ZEROES and make sure that every found BSSID has equal length level arrays
             wifiArray.forEach(wifi => {
                 let wifiData = roomData.wifiData[wifi.BSSID];
                 if (!wifiData) {
