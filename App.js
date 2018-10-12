@@ -20,14 +20,14 @@ export default class App extends Component<Props> {
         super(props);
         
         this.state = {
-            wifiData: {},
+            wifiData: [],
             magnetometer: {},
             
             granted: false,
             scanning: false,
             rooms: ['living room', 'kitchen', 'bedroom'],
-            activeRoom: 'living room',
-            username: undefined,
+            activeRoom: 'livingRoom',
+            sessionName: undefined,
             sending: false,
             error: false,
             
@@ -43,8 +43,8 @@ export default class App extends Component<Props> {
             this.setState({ granted: granted });
         }
         
-        AsyncStorage.getItem('username').then(username => {
-            this.setState({ username });
+        AsyncStorage.getItem('sessionName').then(sessionName => {
+            this.setState({ sessionName });
         });
     }
     
@@ -91,6 +91,17 @@ export default class App extends Component<Props> {
 
         wifi.reScanAndLoadWifiList((wifiStringList) => {
             const wifiArray = JSON.parse(wifiStringList);
+            const data = {};
+            const input = {};
+            const output = { [this.state.activeRoom]: 1 };
+            
+            wifiArray.forEach(wifi => {
+                input[wifi.BSSID] = wifi.level; 
+            });
+            
+            data['input'] = input;
+            data['output'] = output;
+            /*
             this.setState({ topWifiSignal: wifiArray[0]});
             
             const data = this.state.wifiData;
@@ -110,8 +121,11 @@ export default class App extends Component<Props> {
                 roomData.wifiData[wifi.BSSID] = wifiData;
             });
             data[this.state.activeRoom] = roomData;
-
-            this.setState({ wifiData: data});
+            */
+            //{ input: { ssid: level, ... }, { output: { roomName: 1}}}
+            
+            let wifiData = [...this.state.wifiData, data];
+            this.setState({ wifiData });
         }, error => console.log(error));
         
         console.log(this.state.scanning);
@@ -137,10 +151,10 @@ export default class App extends Component<Props> {
     uploadData() {
         this.stopScanning();
         
-        if (this.state.username && this.state.username !== '') {
+        if (this.state.sessionName && this.state.sessionName !== '') {
             this.setState({ sending: true });
-            firestore.collection(this.state.username).doc('wifi').set(this.state.wifiData).then(result => {
-                firestore.collection(this.state.username).doc('magnetometer').set(this.state.magnetometer).then(result => {
+            firestore.collection(this.state.sessionName).doc('wifi').set({ levels: this.state.wifiData}).then(result => {
+                firestore.collection(this.state.sessionName).doc('magnetometer').set(this.state.magnetometer).then(result => {
                     this.setState({ sending: false });
                 });
             });
@@ -149,7 +163,7 @@ export default class App extends Component<Props> {
             this.setState({ error: true });
         }
         
-        console.log(this.state.username);
+        console.log(this.state.sessionName);
         
     }
   
@@ -158,16 +172,12 @@ export default class App extends Component<Props> {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Text style={styles.welcome}>{this.state.topMagnetSignal ? JSON.stringify(this.state.topMagnetSignal) : ''}</Text>
-                    <Text style={styles.welcome}>{this.state.topWifiSignal 
-                        ? this.state.topWifiSignal.BSSID + '\n' + this.state.topWifiSignal.SSID + '\n' + this.state.topWifiSignal.level 
-                        : 'start scanning'}</Text>
                     <TextInput maxLength={18}
                                underlineColorAndroid='transparent'
-                               value={this.state.username}
-                               placeholder='Enter your username...'
+                               value={this.state.sessionName}
+                               placeholder='Enter your session name...'
                                //placeholderTextColor={colors.lightGrey}
-                               onChangeText={username => this.setState({ username, error: false })}
+                               onChangeText={username => this.setState({ sessionName: username, error: false })}
                     />
                     { this.state.error && <Text style={styles.error}>Please enter a username</Text> }
                     <Text style={styles.instructions}>Click the button to scan your local wifis</Text>
